@@ -1,4 +1,7 @@
 import cv2
+from scipy.optimize import newton
+from operator import itemgetter
+from itertools import groupby
 
 
 class videoRandomizer:
@@ -25,15 +28,29 @@ class videoRandomizer:
         self.nCuts = 0
         self.cutBias = 0
         self.sceneBias = 0
+        self.profile = []
 
         if 'nFrames' in kwargs:
             self.nFrames = kwargs['nFrames']
+        else:
+            set_nFrames()
         if 'nCuts' in kwargs:
             self.nCuts = kwargs['nCuts']
         if 'cutBias' in kwargs:
             self.cutBias = kwargs['cutBias']
         if 'sceneBias' in kwargs:
             self.sceneBias = kwargs['sceneBias']
+        if 'profile' in kwargs:
+            if kwargs['profile'][-1] != self.nFrames:
+                print('Profile expected to end at {0!d}(i.e. nFrames).
+                      Profile discarded. Please reset using set_profile.'
+                      .format(nFrames))
+            if len(kwargs['profile'] != self.nCuts + 1):
+                print('Profile length should be equal to {0!d}(i.e. nCuts + 1).
+                      Updating nCuts to conform to profile length.'
+                      .format(self.nCuts + 1))
+                self.nCuts = len(kwargs['profile']) - 1
+            self.profile = kwargs['profile']
 
         return self
 
@@ -57,6 +74,53 @@ class videoRandomizer:
 
         return self
 
+    def _compute_profile(self, shape):
+        """Compute profile of cuts."""
+        if shape == 'exp':
+            # to calculate base need to solve transcendetal eq
+            # nFrames*log(base) - base**nCuts = 1
+            base = newton(lambda x: 1 + self.nFrames *
+                          np.log(x) - x**self.nCuts, 2, fprime=lambda x:
+                          self.nFrames / x - self.nCuts * x ** (self.nCuts - 1))
+            profile = np.cumsum(
+                np.power(base, range(1, self.nCuts + 1)).astype(int))
+            profile[-1] = self.nFrames  # force, just in case
+        else:
+            raise ValueError('Invalid value for shape.')
+
+        return profile
+
+    def set_profile(self, *args, **kwargs):
+        """Set profile of cuts."""
+        if len(args) == 0:
+            if 'shape' in kwargs:
+                print('Computing {0!s} profile for {1!d} frames and {2!d} cuts'
+                      .format(kwargs['shape'], self.nFrames, self.nCuts))
+                self.profile = _compute_profile(kwargs['shape'])
+            else:
+                raise ValueError(
+                    'If profile is not explicit, must specify profile shape.')
+        elif len(args) == 1:
+            profile = args[0]
+            if profile[-1] != self.nFrames:
+                raise ValueError(
+                    'Expected profile[-1] == {0!d} (i.e. nFrames)'.format(nFrames))
+            if len(profile) != self.nCuts + 1:
+                raise ValueError(
+                    'Length of profile must be {0!d} (i.e. nCuts + 1)'
+                    .format(self.nCuts + 1))
+            if not all(profile[k] <= profile[k + 1] for k in
+                       range(len(profile) - 1)):
+                raise ValueError('Profile must be sorted in ascending order.')
+            if not all(isinstance(item, int) for item in profile):
+                raise ValueError('Profile must contain only integers.')
+            self.profile = profile
+        else:
+            raise TypeError(
+                'Expected explicit profile or parameters for computed profile.')
+
+        return self
+
     def set_cutBias(self, cutBias):
         """Set cutBias."""
         self.cutBias = cutBias
@@ -69,14 +133,83 @@ class videoRandomizer:
 
         return self
 
-    def set_profile(self, function, **kwargs):
-        return self
-
     def _compute_bias(self):
         return self
 
-    def compute_cuts(self):
-        return self
+    def compute_cuts(self, **kwargs):
+        """Computes location of cuts to make in original video.
+
+        Uses profile to compute a pseudo-random recut of video of
+        length nFrames. Profile specifies where the cuts will occur in
+        the output. The output is a list of integers corresponding
+        with frames of the original video. Cuts are discontinuities in
+        the sequence.
+
+        Cuts are computed by first taking the difference of the
+        profile, a list of the number of frames between cuts. One can
+        think of this list as a list of "scene" durations (hereafter
+        "scenes" or "subintervals"). The task is to construct a place
+        the scenes/subintervals in a (nearly) random way such that
+        they cover the entire interval of the original video
+        (i.e. range(nFrames)). This is accomplished by beginning with
+        the largest subinterval and randomly selecting a frame, k, and
+        appending range(k, k + len(subinterval)) to the output. This
+        is repeated for the next largest subinterval, and so on. A
+        list is created at each step of candidate frames where the
+        current subinterval can be placed without overlapping previous
+        selections. If this list is empty, previous selections are
+        incrementally moved to create space for the current
+        subinterval to fit.
+
+        An option is included to visualize this process.
+        """
+
+        # may want to rewrite this with sets if slow
+        # or maybe strings?
+        vidOut = []
+        scenes = sorted(np.diff(self.profile), reverse=True)
+        for scene in scenes:
+            available = [frame for frame in range(nFrames)
+                         if frame not in vidOut]
+            candidates = [frame for frame in available
+                          if all(x in available for x
+                                 in range(frame, frame + scene))]
+            if candidates:
+                # assuming monotonic growth for scenes
+                # prepending gives correct ordering (consider deque instead)
+                # but should really keep track of sorting and unsort later
+                vidOut.insert(0, np.random.choice(candidates))
+            else:
+                # current scene doesn't fit anywhere
+                # nudge existing selections out of the way
+                # (this should become one or more helper functions)
+                # first find largest remaining selection in original
+                bigGap = [0, []]
+                for k, g in groupby(enumerate(available),
+                                    lambda item: item[0] - item[1]):
+                    group = list(map(itemgetter(1), g))
+                    if len(group) > bigGap[0]:
+                        bigGap = [len(group), group]
+                # find scenes in vidOut containing adjacent frames
+                adjFrames = (bigGap[1][0] - 1, bigGap[1][-1] + 1)
+                for k, g in groupby(enumerate(vidOut),
+                                    lambda item: item[0] - item[1]):
+                    group = list(map(itemgetter(1), g))
+                    if adjFrames[0] in group:
+                        lowBound = group
+                    elif adjFrames[1] in group:
+                        upBound = group
+                lowSpace = min([lowBound[0] - frame for frame
+                                in filter(lambda x: x < lowBound[0], vidOut)])
+                upSpace = min([frame - upBound[-1] for frame
+                               in filter(lambda x: x > upBound[-1], vidOut)])
+                if lowSpace + upSpace < scene - bigGap[0]:
+                    # temporary error
+                    raise Error('Not enough space immediately available
+                                for nudging. This error will be fixed
+                                in the future.')
+
+        return vidOut
 
     def write_video(self):
         return self
