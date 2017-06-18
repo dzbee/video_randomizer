@@ -1,4 +1,4 @@
-# import cv2
+import cv2
 from scipy.optimize import newton
 from operator import itemgetter
 from itertools import groupby
@@ -64,12 +64,8 @@ class videoRandomizer:
             else:
                 self.nFrames = args[0]
         else:
-            # I don't have cv2 installed yet and can't test
-            # vid = cv2.VideoCapture(self.fname)
-            # self.nFrames = vid.get(CV_CAP_PROP_FRAME_COUNT)
-            print('Reading frame count from video not yet enabled.'
-                  + 'Setting nFrames = 0')
-            self.nFrames = 0
+            vid = cv2.VideoCapture(self.fname)
+            self.nFrames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
 
         return self
 
