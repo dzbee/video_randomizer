@@ -163,18 +163,16 @@ class videoRandomizer:
                 lowBound = (indices, group)
             elif adjFrames[1] in group:
                 upBound = (indices, group)
-            lowSpace = min([lowBound[0] - frame for frame
-                            in filter(lambda x: x < lowBound[0], vidOut)])
-            upSpace = min([frame - upBound[-1] for frame
-                           in filter(lambda x: x > upBound[-1], vidOut)])
-            if lowSpace > scene - bigGap[0]:
-                vidOut[list(lowBound[0])] -= scene - bigGap[0]
-                vidOut.insert(0, bigGap[1][0] - (scene - bigGap[0]))
-            else:
-                vidOut[list(lowBound[0])] -= lowSpace
-                vidOut.insert(0, bigGap[1][0] - (scene - bigGap[0]))
-            vidOut[list(upBound[0])] += max(scene -
-                                            bigGap[0] - lowSpace, 0)
+        lowSpace = min([lowBound[1][0] - frame for frame
+                        in filter(lambda x: x < lowBound[1][0], vidOut)])
+        upSpace = min([frame - upBound[1][-1] for frame
+                       in filter(lambda x: x > upBound[1][-1], vidOut)])
+        if lowSpace > scene - bigGap[0]:
+            vidOut[list(lowBound[0])] -= scene - bigGap[0]
+        else:
+            vidOut[list(lowBound[0])] -= lowSpace
+        vidOut[list(upBound[0])] += max(scene -
+                                        bigGap[0] - lowSpace, 0)
 
         return vidOut
 
@@ -233,7 +231,7 @@ class videoRandomizer:
                 while not candidates:
                     # _make_space errors out
                     self.vidOut = self._make_space(
-                        self.vidOut, available, scene)
+                        np.array(self.vidOut), available, scene).tolist()
                     available = [frame for frame in range(self.nFrames)
                                  if frame not in self.vidOut]
                     candidates = [frame for frame in available
