@@ -160,24 +160,27 @@ class videoRandomizer:
                 bigGap = [len(group), group]
         # find scenes in vidOut containing adjacent frames
         adjFrames = (bigGap[1][0] - 1, bigGap[1][-1] + 1)
+        lowBound = ([], [])
+        upBound = ([], [])
         for k, g in groupby(enumerate(vidOut),
                             lambda item: item[0] - item[1]):
             indices, group = zip(*list(g))
             if adjFrames[0] in group:
-                # didn't get assigned
                 lowBound = (indices, group)
             elif adjFrames[1] in group:
                 upBound = (indices, group)
-        lowSpace = min([lowBound[1][0] - frame for frame
-                        in filter(lambda x: x < lowBound[1][0], vidOut)])
-        upSpace = min([frame - upBound[1][-1] for frame
-                       in filter(lambda x: x > upBound[1][-1], vidOut)])
-        if lowSpace > scene - bigGap[0]:
-            vidOut[list(lowBound[0])] -= scene - bigGap[0]
-        else:
-            vidOut[list(lowBound[0])] -= lowSpace
-        vidOut[list(upBound[0])] += max(scene -
-                                        bigGap[0] - lowSpace, 0)
+        if lowBound:
+            lowSpace = min([lowBound[1][0] - frame for frame
+                            in filter(lambda x: x < lowBound[1][0], vidOut)])
+            if lowSpace > scene - bigGap[0]:
+                vidOut[list(lowBound[0])] -= scene - bigGap[0]
+            else:
+                vidOut[list(lowBound[0])] -= lowSpace
+        if upBound:
+            upSpace = min([frame - upBound[1][-1] for frame
+                           in filter(lambda x: x > upBound[1][-1], vidOut)])
+            vidOut[list(upBound[0])] += max(scene -
+                                            bigGap[0] - lowSpace, 0)
 
         return vidOut
 
@@ -212,24 +215,27 @@ class videoRandomizer:
         if 'vis' in kwargs and kwargs['vis']:
             pass
 
-        # may want to rewrite this with sets if slow
-        # or maybe strings?
         self.vidOut = []
         scenes = sorted(np.diff(self.profile), reverse=True)
-        pbar = tqdm("Computing", total=len(scenes))
 
+        if 'pbar' in kwargs and kwargs['pbar']:
+            pbar = tqdm("Computing", total=len(scenes))
+
+        frames = set(range(self.nFrames))
+        used = set(self.vidOut)
         for scene in scenes:
-            available = [frame for frame in range(self.nFrames)
-                         if frame not in self.vidOut]
+            available = set([frame for frame in frames
+                             if frame not in used])
             candidates = [frame for frame in available
                           if all(x in available for x
-                                 in range(frame, frame + scene))]
+                                 in set(range(frame, frame + scene)))]
             if candidates:
                 # assuming monotonic growth for scenes
                 # prepending gives correct ordering (consider deque instead)
                 # but should really keep track of sorting and unsort later
                 start = np.random.choice(candidates)
                 self.vidOut[:0] = list(range(start, start + scene))
+                used.update(list(range(start, start + scene)))
             else:
                 # current scene doesn't fit anywhere
                 # nudge existing selections out of the way
@@ -244,7 +250,9 @@ class videoRandomizer:
                                          in range(frame, frame + scene))]
                 start = np.random.choice(candidates)
                 self.vidOut[:0] = list(range(start, start + scene))
-            pbar.update(1)
+                used.update(list(range(start, start + scene)))
+            if 'pbar' in kwargs and kwargs['pbar']:
+                pbar.update(1)
             if 'vis' in kwargs and kwargs['vis']:
                 pass
 
