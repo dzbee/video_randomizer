@@ -83,15 +83,20 @@ class videoRandomizer:
     def _compute_profile(shape, nFrames, nCuts):
         """Compute profile of cuts."""
         if shape == 'exp':
-            # to calculate base need to solve transcendetal eq
-            # nFrames*log(base) - base**nCuts = 1
-            # note x0 is hard-coded to be large, but not foolproof
+            # calculate base in two stages
+            # approximate using smooth function
             base = newton(lambda x: 1 + nFrames *
-                          np.log(x) - x**nCuts, 100, fprime=lambda x:
-                          nFrames / x - nCuts * x ** (nCuts - 1), maxiter=1000)
+                          np.log(x) - x**nCuts, nFrames**(1 / nCuts),
+                          fprime=lambda x: nFrames / x -
+                          nCuts * x ** (nCuts - 1),
+                          maxiter=1000)
+            # solve exact discrete function using approximation
+            base = newton(lambda x: np.cumsum(
+                np.power(x, range(1, nCuts + 1)).astype(int))[-1] - nFrames,
+                base, maxiter=1000)
             profile = np.cumsum(
                 np.power(base, range(1, nCuts + 1)).astype(int))
-            profile[-1] = nFrames  # force, just in case (not ideal)
+            profile[-1] = nFrames  # force, just in case
         else:
             raise ValueError('Invalid value for shape.')
 
