@@ -66,6 +66,7 @@ class videoRandomizer:
         else:
             vid = cv2.VideoCapture(self.fname)
             self.nFrames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
+            vid.release()
 
         return self
 
@@ -254,5 +255,24 @@ class videoRandomizer:
 
         return self
 
-    def write_video(self):
+    def write_video(self, outname, **kwargs):
+        if self.vidOut:
+            if 'pbar' in kwargs and kwargs['pbar']:
+                pbar = tqdm("Computing", total=len(scenes))
+            inVid = cv2.VideoCapture(self.fname)
+            outVid = cv2.VideoWriter(outname, int(inVid.get(cv2.CAP_PROP_FOURCC)),
+                                     int(inVid.get(cv2.CAP_PROP_FPS)),
+                                     (int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                                      int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))))
+            for frame in self.vidOut:
+                inVid.set(cv2.CV_CAP_PROP_POS_FRAMES, frame)
+                _, image = inVid.read()
+                outVid.write(image)
+                if 'pbar' in kwargs and kwargs['pbar']:
+                    pbar.update(1)
+            inVid.release()
+            outVid.release()
+        else:
+            raise ValueError(
+                'Output video has not been computed. Run compute_cuts.')
         return self
