@@ -228,7 +228,7 @@ class VideoRandomizer:
                                  in set(range(frame, frame + scene)))]
             if candidates:
                 # assuming monotonic growth for scenes
-                # prepending gives correct ordering (consider deque instead)
+                # prepending gives correct ordering
                 # but should really keep track of sorting and unsort later
                 start = np.random.choice(candidates)
                 self.vidOut[:0] = list(range(start, start + scene))
