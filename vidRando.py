@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-class videoRandomizer:
+class VideoRandomizer:
     """Interface object for randomly recutting video based on user settings.
 
     Parameters
@@ -256,16 +256,21 @@ class videoRandomizer:
         return self
 
     def write_video(self, outname, **kwargs):
+        if outname[-4:] != '.avi':
+            raise ValueError('Output must use AVI file extension.')
         if self.vidOut:
             if 'pbar' in kwargs and kwargs['pbar']:
-                pbar = tqdm("Computing", total=len(scenes))
+                pbar = tqdm("Computing", total=len(self.vidOut))
             inVid = cv2.VideoCapture(self.fname)
-            outVid = cv2.VideoWriter(outname, int(inVid.get(cv2.CAP_PROP_FOURCC)),
+            outVid = cv2.VideoWriter(outname,
+                                     cv2.VideoWriter_fourcc(
+                                         'M', 'J', 'P', 'G'),
                                      int(inVid.get(cv2.CAP_PROP_FPS)),
                                      (int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH)),
                                       int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))))
             for frame in self.vidOut:
-                inVid.set(cv2.CV_CAP_PROP_POS_FRAMES, frame)
+                # loop sometimes hangs?
+                inVid.set(cv2.CAP_PROP_POS_FRAMES, frame)
                 _, image = inVid.read()
                 outVid.write(image)
                 if 'pbar' in kwargs and kwargs['pbar']:
