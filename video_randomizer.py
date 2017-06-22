@@ -1,4 +1,4 @@
-import cv2
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 from scipy.optimize import newton
 from operator import itemgetter
 from itertools import groupby
@@ -229,6 +229,7 @@ class VideoRandomizer:
             if candidates:
                 # assuming monotonic growth for scenes
                 # prepending gives correct ordering
+                # NOPE SHOULD PUSH/POP, USE STACK
                 # but should really keep track of sorting and unsort later
                 start = np.random.choice(candidates)
                 self.vidOut[:0] = list(range(start, start + scene))
@@ -255,28 +256,26 @@ class VideoRandomizer:
 
         return self
 
+    @staticmethod
+    def _convert_vidOut(vidOut, dt):
+        # need to decide whether vidOut should be array or list
+        # make operations consistent with data type
+        return list(np.array(vidOut) * dt)
+
     def write_video(self, outname, **kwargs):
-        if outname[-4:] != '.avi':
-            raise ValueError('Output must use AVI file extension.')
         if self.vidOut:
             if 'pbar' in kwargs and kwargs['pbar']:
                 pbar = tqdm("Computing", total=len(self.vidOut))
-            inVid = cv2.VideoCapture(self.fname)
-            outVid = cv2.VideoWriter(outname,
-                                     cv2.VideoWriter_fourcc(
-                                         'M', 'J', 'P', 'G'),
-                                     int(inVid.get(cv2.CAP_PROP_FPS)),
-                                     (int(inVid.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                                      int(inVid.get(cv2.CAP_PROP_FRAME_HEIGHT))))
-            for frame in self.vidOut:
-                # loop sometimes hangs?
-                inVid.set(cv2.CAP_PROP_POS_FRAMES, frame)
-                _, image = inVid.read()
-                outVid.write(image)
+            inVid = VideoFileClip(fname)
+            dt = 1.0 / inVid.fps
+            clips = []
+            vidOut = self._convert_vidOut(self.vidOut, dt)
+            for frame in vidOut:
+                clips.append(inVid.subclip(frame, frame + dt))
                 if 'pbar' in kwargs and kwargs['pbar']:
                     pbar.update(1)
-            inVid.release()
-            outVid.release()
+            outVid = concatenate_videoclips(clips)
+            outVid.write_videofile(outname)
         else:
             raise ValueError(
                 'Output video has not been computed. Run compute_cuts.')
