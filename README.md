@@ -11,3 +11,7 @@ he output). The user can also choose to bias the random cuts to match
 cuts or scene changes in the original video. The class also exposes
 methods to assist the user in generating desirable profiles of new
 'scene' durations.
+
+# Dependencies
+
+The VideoRandomizer makes use of [`ffmpeg`](https://github.com/FFmpeg/FFmpeg) for handling audio.
