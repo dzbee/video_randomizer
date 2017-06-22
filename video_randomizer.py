@@ -64,9 +64,8 @@ class VideoRandomizer:
             else:
                 self.nFrames = args[0]
         else:
-            vid = cv2.VideoCapture(self.fname)
-            self.nFrames = int(vid.get(cv2.CAP_PROP_FRAME_COUNT))
-            vid.release()
+            vid = VideoFileClip(self.fname)
+            self.nFrames = int(vid.duration * vid.fps)
 
         return self
 
@@ -266,7 +265,7 @@ class VideoRandomizer:
         if self.vidOut:
             if 'pbar' in kwargs and kwargs['pbar']:
                 pbar = tqdm("Computing", total=len(self.vidOut))
-            inVid = VideoFileClip(fname)
+            inVid = VideoFileClip(self.fname)
             dt = 1.0 / inVid.fps
             clips = []
             vidOut = self._convert_vidOut(self.vidOut, dt)
